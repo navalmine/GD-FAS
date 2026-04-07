@@ -20,7 +20,7 @@ def parse_args():
     parser.add_argument('--silence', action='store_true')
     parser.add_argument('--log_name', type=str, default="test", help='log')
     parser.add_argument('--seed', type=int, default=2025, help='')
-    parser.add_argument('--data_root', type=str, default="datasets", help='YOUR_Data_Dir')
+    parser.add_argument('--data_root', type=str, default="datasets_tmp", help='YOUR_Data_Dir')
     parser.add_argument('--protocol', type=str, default="O_C_I_to_M", help='O_C_I_to_M, O_M_I_to_C, O_C_M_to_I, I_C_M_to_O')
     parser.add_argument('--max_iter', type=int, default=400, help='')
     parser.add_argument('--batch_size', type=int, default=16, help='')

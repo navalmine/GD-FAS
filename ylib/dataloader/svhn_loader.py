@@ -82,7 +82,7 @@ class SVHN(data.Dataset):
         else:
             img, target = self.data[index], self.targets[index]
 
-        # doing this so that it is consistent with all other datasets
+        # doing this so that it is consistent with all other datasets_tmp
         # to return a PIL Image
         img = Image.fromarray(np.transpose(img, (1, 2, 0)))
 
