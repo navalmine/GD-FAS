@@ -1,2 +1,4 @@
 datasets_tmp/
-dataset/
+datasets/
+results/
+.idea/

@@ -16,7 +16,7 @@ IMAGE_RE = re.compile(r"^crop_(?P<frame>\d+)\.(?P<ext>jpg|jpeg|png)$", re.IGNORE
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Organize datasets_tmp/FAS/OULU-NPU/preposess into the model-ready dataset/OULU layout."
+        description="Organize datasets_tmp/FAS/OULU-NPU/preposess into the model-ready datasets/OULU layout."
     )
     parser.add_argument(
         "--source",
@@ -27,8 +27,8 @@ def parse_args():
     parser.add_argument(
         "--target",
         type=Path,
-        default=Path("dataset/OULU"),
-        help="Target OULU dataset directory used by the model.",
+        default=Path("datasets/OULU"),
+        help="Target OULU datasets directory used by the model.",
     )
     parser.add_argument(
         "--mode",

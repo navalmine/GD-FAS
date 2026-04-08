@@ -9,3 +9,4 @@ pillow==10.3.0
 scikit-image==0.21.0
 scikit-learn==1.0.2
 scipy==1.8.0
+tqdm==4.66.5

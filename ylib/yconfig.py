@@ -1,5 +1,5 @@
 DATASET_PATH = {
-    'places365': '/Users/sunyiyou/dataset/places365_standard',
+    'places365': '/Users/sunyiyou/datasets/places365_standard',
     'imagenet': '',
 }
 

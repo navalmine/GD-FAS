@@ -12,19 +12,19 @@ IMAGE_RE = re.compile(r"^crop_(?P<frame>\d+)\.(?P<ext>jpg|jpeg|png)$", re.IGNORE
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Reorganize ./dataset/preposess into the README dataset layout."
+        description="Reorganize ./datasets/preposess into the README datasets layout."
     )
     parser.add_argument(
         "--source",
         type=Path,
-        default=Path("dataset/preposess"),
+        default=Path("datasets/preposess"),
         help="Source directory containing preprocessed video folders.",
     )
     parser.add_argument(
         "--target",
         type=Path,
-        default=Path("dataset"),
-        help="Root directory for the organized dataset.",
+        default=Path("datasets"),
+        help="Root directory for the organized datasets.",
     )
     parser.add_argument(
         "--mode",

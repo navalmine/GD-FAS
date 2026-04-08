@@ -160,10 +160,10 @@ def crop_rotated_rectangle_test():
 
     # Better to test in Jupyter Notebook
 
-    img = cv2.imread('/media/sunyiyou/ubuntu-hdd1/dataset/FAS/CASIA_faceAntisp/preposess/replay_test_live_9_NM_1/org_0000.jpg')
+    img = cv2.imread('/media/sunyiyou/ubuntu-hdd1/datasets/FAS/CASIA_faceAntisp/preposess/replay_test_live_9_NM_1/org_0000.jpg')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    info = np.load('/media/sunyiyou/ubuntu-hdd1/dataset/FAS/CASIA_faceAntisp/preposess/replay_test_live_9_NM_1/infov1_0000.npy', allow_pickle=True).item()
+    info = np.load('/media/sunyiyou/ubuntu-hdd1/datasets/FAS/CASIA_faceAntisp/preposess/replay_test_live_9_NM_1/infov1_0000.npy', allow_pickle=True).item()
 
     points = np.array(info['points'])
     dist = lambda p1, p2 : int(np.sqrt(((p1 - p2) ** 2).sum()))
