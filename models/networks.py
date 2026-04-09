@@ -23,6 +23,51 @@ class AverageMeter(object):
             self.cnt += n
             self.avg = self.sum / self.cnt
 
+
+class TextEncoder(nn.Module):
+    def __init__(self, clip_model):
+        super().__init__()
+        self.transformer = clip_model.transformer
+        self.positional_embedding = clip_model.positional_embedding
+        self.ln_final = clip_model.ln_final
+        self.text_projection = clip_model.text_projection
+        self.dtype = clip_model.dtype
+
+    def forward(self, prompts, tokenized_prompts):
+        x = prompts + self.positional_embedding.type(self.dtype)
+        x = x.permute(1, 0, 2)
+        x = self.transformer(x)
+        x = x.permute(1, 0, 2)
+        x = self.ln_final(x).type(self.dtype)
+        x = x[torch.arange(x.shape[0]), tokenized_prompts.argmax(dim=-1)] @ self.text_projection
+        return x
+
+
+class PromptLearner(nn.Module):
+    def __init__(self, clip_model, n_ctx=4):
+        super().__init__()
+        self.n_ctx = n_ctx
+        self.dtype = clip_model.dtype
+        self.ctx_dim = clip_model.ln_final.weight.shape[0]
+        prompt_prefix = " ".join(["X"] * n_ctx)
+        class_names = ["real face.", "spoof face."]
+        prompts = [f"{prompt_prefix} {name}" for name in class_names]
+        tokenized_prompts = tokenize(prompts)
+
+        with torch.no_grad():
+            embedding = clip_model.token_embedding(tokenized_prompts).type(self.dtype)
+
+        self.ctx = nn.Parameter(torch.empty(n_ctx, self.ctx_dim, dtype=self.dtype))
+        nn.init.normal_(self.ctx, std=0.02)
+
+        self.register_buffer("tokenized_prompts", tokenized_prompts)
+        self.register_buffer("token_prefix", embedding[:, :1, :])
+        self.register_buffer("token_suffix", embedding[:, 1 + n_ctx :, :])
+
+    def forward(self):
+        ctx = self.ctx.unsqueeze(0).expand(self.token_prefix.size(0), -1, -1)
+        return torch.cat([self.token_prefix, ctx, self.token_suffix], dim=1), self.tokenized_prompts
+
 class resnet(nn.Module):
     # setup
     def __init__(self, args):
@@ -186,9 +231,14 @@ class clip_encoder(nn.Module):
         self.alpha = np.log(args.num_domain)/2
         self.beta = args.beta
         self.gs = args.gs
+        self.prompt_mode = args.prompt_mode
+        self.n_ctx = args.n_ctx
 
         # load the model
         self.model, _ = load("ViT-B/16", "cuda:0")
+        self.text_encoder = TextEncoder(self.model)
+        self.prompt_learner = PromptLearner(self.model, n_ctx=self.n_ctx)
+        self._build_fixed_prompts()
 
         # define the mlp
         in_dim, mlp_dim, out_dim = 512,4096,256
@@ -201,29 +251,6 @@ class clip_encoder(nn.Module):
 
         # define loss
         self.define_losses()
-
-        # define spoof and real templates
-        spoof_templates = [
-            "This is an example of a spoof face",
-            "This is an example of an attack face",
-            "This is not a real face",
-            "This is how a spoof face looks like",
-            "a photo of a spoof face",
-            "a printout shown to be a spoof face",
-        ]
-
-        real_templates = [
-            "This is an example of a real face",
-            "This is a bonafide face",
-            "This is a real face",
-            "This is how a real face looks like",
-            "a photo of a real face",
-            "This is not a spoof face",
-        ]
-
-        # tokenize the spoof and real templates
-        self.spoof_texts = tokenize(spoof_templates).cuda(non_blocking=True)  # tokenize
-        self.real_texts = tokenize(real_templates).cuda(non_blocking=True)  # tokenize
 
     def _build_mlp(self, in_dim, mlp_dim, out_dim):
         return nn.Sequential(
@@ -275,6 +302,48 @@ class clip_encoder(nn.Module):
         }
 
         return info
+
+    def _build_fixed_prompts(self):
+        spoof_templates = [
+            "This is an example of a spoof face",
+            "This is an example of an attack face",
+            "This is not a real face",
+            "This is how a spoof face looks like",
+            "a photo of a spoof face",
+            "a printout shown to be a spoof face",
+        ]
+
+        real_templates = [
+            "This is an example of a real face",
+            "This is a bonafide face",
+            "This is a real face",
+            "This is how a real face looks like",
+            "a photo of a real face",
+            "This is not a spoof face",
+        ]
+
+        self.register_buffer("spoof_texts", tokenize(spoof_templates))
+        self.register_buffer("real_texts", tokenize(real_templates))
+
+    def encode_fixed_text(self):
+        all_spoof_class_embeddings = self.model.encode_text(self.spoof_texts)
+        all_real_class_embeddings = self.model.encode_text(self.real_texts)
+        spoof_class_embeddings = all_spoof_class_embeddings.mean(dim=0)
+        real_class_embeddings = all_real_class_embeddings.mean(dim=0)
+        return torch.stack([spoof_class_embeddings, real_class_embeddings], dim=0)
+
+    def encode_prompt_text(self):
+        prompts, tokenized_prompts = self.prompt_learner()
+        prompts = prompts.to(device=self.model.positional_embedding.device)
+        tokenized_prompts = tokenized_prompts.to(device=self.model.positional_embedding.device)
+        text_features = self.text_encoder(prompts, tokenized_prompts)
+        # label 0 is spoof and label 1 is live, so reorder to keep training targets aligned.
+        return torch.stack([text_features[1], text_features[0]], dim=0)
+
+    def encode_text_features(self):
+        if self.prompt_mode == 'coop':
+            return self.encode_prompt_text()
+        return self.encode_fixed_text()
     
     def compute_domain_similarity(self, text_features):
         self.sim_features['sl'].update((text_features[0]@text_features[1].t()).item())
@@ -319,19 +388,8 @@ class clip_encoder(nn.Module):
             return specific_features
 
     def compute_loss(self, images, labels, domains):
-        # encode the spoof and real templates with the text encoder
-        all_spoof_class_embeddings = self.model.encode_text(self.spoof_texts)
-        all_real_class_embeddings = self.model.encode_text(self.real_texts)
-
         # ------------------- Image-Text Ebedding Space Branch -------------------
-        # Ensemble of text features
-        # embed with text encoder
-        spoof_class_embeddings = all_spoof_class_embeddings.mean(dim=0)
-        real_class_embeddings = all_real_class_embeddings.mean(dim=0)
-
-        # stack the text features of liveness and spoofness.
-        ensemble_weights = [spoof_class_embeddings, real_class_embeddings]
-        text_features = torch.stack(ensemble_weights, dim=0).cuda()
+        text_features = self.encode_text_features()
 
         # get the image features and features
         image_features = self.model.encode_image(images)    # image-features
@@ -412,19 +470,7 @@ class clip_encoder(nn.Module):
         return total_loss
 
     def forward(self, input):
-        # encode the spoof and real templates with the text encoder
-        all_spoof_class_embeddings = self.model.encode_text(self.spoof_texts)
-        all_real_class_embeddings = self.model.encode_text(self.real_texts)
-
-        # ------------------- Image-Text similarity branch -------------------
-        # Ensemble of text features
-        # embed with text encoder
-        spoof_class_embeddings = all_spoof_class_embeddings.mean(dim=0)
-        real_class_embeddings = all_real_class_embeddings.mean(dim=0)
-
-        # stack the embeddings for image-text similarity
-        ensemble_weights = [spoof_class_embeddings, real_class_embeddings]
-        text_features = torch.stack(ensemble_weights, dim=0).cuda()
+        text_features = self.encode_text_features()
 
         # get the image features
         image_features = self.model.encode_image(input)

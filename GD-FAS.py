@@ -23,7 +23,7 @@ def log_f(f, console=True):
     return log
 
 def json_default(value):
-    if isinstance(value, (numpy.integer, numpy.floating)):
+    if isinstance(value, (numpy.integer, numpy.floating, numpy.bool_)):
         return value.item()
     if isinstance(value, numpy.ndarray):
         return value.tolist()
@@ -62,6 +62,8 @@ def parse_args():
     parser.add_argument('--temperature', type=float, default=0.1, help='') 
     parser.add_argument('--params', nargs=4, type=float, default=[1.0, 0.8, 0.1, 1.0])
     parser.add_argument('--step_size', type=int, default=10, help='')
+    parser.add_argument('--prompt_mode', type=str, default='fixed', choices=['fixed', 'coop'], help='text prompt mode')
+    parser.add_argument('--n_ctx', type=int, default=4, help='number of shared CoOp context tokens')
     return parser.parse_args()
 
 def seed_everything(seed):
@@ -97,6 +99,7 @@ def main(args):
         'gs': args.gs,
         'beta': args.beta,
         'temperature': args.temperature,
+        'prompt_mode': args.prompt_mode,
         'params': args.params,
         'save': args.save,
     }
@@ -129,6 +132,8 @@ def main(args):
         print(f'{"gs":20} : {args.gs}')
         print(f'{"beta":20} : {args.beta}')
         print(f'{"temperature":20} : {args.temperature}')
+        print(f'{"prompt mode":20} : {args.prompt_mode}')
+        print(f'{"n_ctx":20} : {args.n_ctx}')
         print(f'{"parameter1":20} : {args.params[0]}')
         print(f'{"parameter2":20} : {args.params[1]}')
         print(f'{"parameter3":20} : {args.params[2]}')
