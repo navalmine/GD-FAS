@@ -52,7 +52,7 @@ class PromptLearner(nn.Module):
         prompt_prefix = " ".join(["X"] * n_ctx)
         class_names = ["real face.", "spoof face."]
         prompts = [f"{prompt_prefix} {name}" for name in class_names]
-        tokenized_prompts = tokenize(prompts)
+        tokenized_prompts = tokenize(prompts).to(clip_model.token_embedding.weight.device)
 
         with torch.no_grad():
             embedding = clip_model.token_embedding(tokenized_prompts).type(self.dtype)
@@ -251,6 +251,7 @@ class clip_encoder(nn.Module):
 
         # define loss
         self.define_losses()
+        self.configure_trainable_parameters()
 
     def _build_mlp(self, in_dim, mlp_dim, out_dim):
         return nn.Sequential(
@@ -302,6 +303,38 @@ class clip_encoder(nn.Module):
         }
 
         return info
+
+    def configure_trainable_parameters(self):
+        if self.prompt_mode != 'coop':
+            return
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        for param in self.text_encoder.parameters():
+            param.requires_grad = False
+
+        for param in self.prompt_learner.parameters():
+            param.requires_grad = True
+
+        for param in self.image_mlp.parameters():
+            param.requires_grad = True
+
+        for param in self.classifier.parameters():
+            param.requires_grad = True
+
+    def get_coop_param_groups(self):
+        prompt_param_ids = {id(param) for param in self.prompt_learner.parameters() if param.requires_grad}
+        prompt_params = []
+        base_params = []
+        for param in self.parameters():
+            if not param.requires_grad:
+                continue
+            if id(param) in prompt_param_ids:
+                prompt_params.append(param)
+            else:
+                base_params.append(param)
+        return prompt_params, base_params
 
     def _build_fixed_prompts(self):
         spoof_templates = [

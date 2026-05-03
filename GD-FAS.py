@@ -64,6 +64,7 @@ def parse_args():
     parser.add_argument('--step_size', type=int, default=10, help='')
     parser.add_argument('--prompt_mode', type=str, default='fixed', choices=['fixed', 'coop'], help='text prompt mode')
     parser.add_argument('--n_ctx', type=int, default=4, help='number of shared CoOp context tokens')
+    parser.add_argument('--coop_prompt_lr_ratio', type=float, default=1.0, help='learning-rate multiplier for CoOp prompt parameters')
     return parser.parse_args()
 
 def seed_everything(seed):
@@ -100,6 +101,7 @@ def main(args):
         'beta': args.beta,
         'temperature': args.temperature,
         'prompt_mode': args.prompt_mode,
+        'coop_prompt_lr_ratio': args.coop_prompt_lr_ratio,
         'params': args.params,
         'save': args.save,
     }
@@ -134,6 +136,7 @@ def main(args):
         print(f'{"temperature":20} : {args.temperature}')
         print(f'{"prompt mode":20} : {args.prompt_mode}')
         print(f'{"n_ctx":20} : {args.n_ctx}')
+        print(f'{"coop lr ratio":20} : {args.coop_prompt_lr_ratio}')
         print(f'{"parameter1":20} : {args.params[0]}')
         print(f'{"parameter2":20} : {args.params[1]}')
         print(f'{"parameter3":20} : {args.params[2]}')
